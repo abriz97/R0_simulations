@@ -1,0 +1,203 @@
+---
+title: "Simulation Experiments"
+author: "Andrea Brizzi"
+date: "04/03/2021"
+output: html_document
+params:
+  methods: ['EG_Lin','EG_P', 'EpiEstim', 'WP', 'WT', 'BR']
+  n_sims: 250
+  missed_gens: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Call required packages
+library(dplyr)
+library(bbmle)
+library(EpiEstim)
+library(R0)
+library(ggplot2)
+library(ggridges)
+library(deSolve)
+library(truncnorm)
+library(cowplot)
+
+# specify repository path
+repo_path <- '~/Documents/mini_project_2/R0-methods-comparison/'
+setwd(repo_path)
+
+# source functions for estimating R0 & data simulation
+source('methods.R')
+source('fit_R0_seq.R')
+source('data_simulation.R')
+source('assess_performance.R')
+```
+
+## Settings
+
+The objective of this html report is to document the results of each simulation.
+Here we define the settings of each simulation.
+
+Time is measured in terms of weeks.
+Data is simulated according to a deterministic SEIR model.
+We assume the disease has mean exposure of 6 days and mean infectiousness of 14 days,
+implying an average generation time of 20 days (circa 3 weeks).
+Hidden inside the ```simulate_data``` function is an assumption about 
+a constant 20% reporting fraction.
+
+```{r}
+gen_interval <- 3
+simulations <- simulate_data(N=params$n_sims, gamma=1/6, sigma=1/14)
+# In case we would like to simulate something that looks more like COVID, it would
+# make more sense to take a look at daily incidence, and modify quite a few things.
+```
+
+We fit all different models assuming a gamma generation interval distribution with
+mean 20 days and standard deviation of 7.4 days.
+```{r}
+GTd <- R0::generation.time("gamma", c(20/7, 7.4/7))
+```
+
+
+## R estimates
+In this experiment, I wanted to look at the effect of missed generations.
+To do so, I firstly simulate the data as in Megan's paper, and then trim off them
+the data for 0, 1, 2 generation intervals.
+I fit the methods to each of these dataset and hopefully get some results later on.
+```{r, ,warning=FALSE,message=FALSE,error=FALSE, results='hide'}
+# list to store results from simulations
+Sim_results <- list()
+
+for(i in 1:3){
+  
+  # list for storage
+  results_i <- list()
+  
+  for (gen in 0:params$missed_gens){
+    # Missed generations parameter
+    
+    results_gen <- list()
+    
+  
+  # for each of the 250 simulations
+  for(j in 1:ncol(simulations$sims)){
+    
+    # data for fitting - simulation j with noise level i
+    sim_ij <- data.frame(week=1:nrow(simulations[[i]]), cases=simulations[[i]][ ,j],
+                         country=paste("sim", j, sep='_'))
+    
+    sim_ij_gen <- sim_ij %>% filter(week > gen_interval * gen)
+    
+    
+    # fit & store results
+    results_gen[[j]] <- fit_R0_seq(data=sim_ij_gen, 
+                        mean_GT=20/7, sd_GT=7.4/7, GTd=GTd, GT_week=3,
+                        methods = params$methods)
+    
+    }
+    
+    #store results from each missed_gen cut off
+    results_i[[gen + 1]] <- results_gen
+    
+  }
+  
+  # store results from each noise level
+  Sim_results[[i]] <- results_i
+}
+```
+At the moment I cannot seem to have EG_MLE working. WHY?
+
+## Results{.tabset}
+
+It is now time to compare results across the three different noise levels.
+
+```{r echo = FALSE}
+# calculate performance metrics
+metrics_NoNoise <- list()
+metrics_Poisson <- list()
+metrics_NegBinom <- list()
+
+for (k in 0:params$missed_gens){
+  metrics_NoNoise[[k + 1]] <- performance_metrics(trueR0=simulations$pars,
+                                     estimates=Sim_results[[1]][[k + 1]],
+                                     max_weeks=15,
+                                     min_peak=15)
+  metrics_Poisson[[k + 1]] <- performance_metrics(trueR0=simulations$pars,
+                                     estimates=Sim_results[[2]][[k + 1]],
+                                     max_weeks=15,
+                                     min_peak=15)
+  metrics_NegBinom[[k + 1]] <- performance_metrics(trueR0=simulations$pars,
+                                        estimates=Sim_results[[3]][[k + 1]],
+                                        max_weeks=15, 
+                                        min_peak=15)
+  
+}
+
+# choose metrics to plot
+want <- c('Bias','Coverage','Uncertainty','RMSE')
+```
+
+And show them all together.
+
+### No Noise
+```{r, echo = FALSE, fig.width=10,fig.height=25}
+#would be better to loop these
+SummPlot_0 <- summary_plot(metrics_NoNoise[[1]]$metrics_summ, include=want)
+SummPlot_1 <- summary_plot(metrics_NoNoise[[2]]$metrics_summ, include=want)
+SummPlot_2 <- summary_plot(metrics_NoNoise[[3]]$metrics_summ, include=want)
+
+plot_grid(SummPlot_0, SummPlot_1, SummPlot_2, 
+          labels = c("0", "1", "2"),
+           
+          nrow = params$missed_gens  + 1)
+
+BPlot_0 <- bias_plot(metrics_NoNoise[[1]]$metrics_indiv)
+BPlot_1 <- bias_plot(metrics_NoNoise[[2]]$metrics_indiv)
+BPlot_2 <- bias_plot(metrics_NoNoise[[3]]$metrics_indiv)
+
+plot_grid(BPlot_0, BPlot_1, BPlot_2, 
+          labels = c("0", "1", "2"),
+          nrow = params$missed_gens  + 1)
+```
+
+### Poisson Noise
+```{r, echo = FALSE, fig.width=10,fig.height=25}
+SummPlot_0 <- summary_plot(metrics_Poisson[[1]]$metrics_summ, include=want)
+SummPlot_1 <- summary_plot(metrics_Poisson[[2]]$metrics_summ, include=want)
+SummPlot_2 <- summary_plot(metrics_Poisson[[3]]$metrics_summ, include=want)
+
+plot_grid(SummPlot_0, SummPlot_1, SummPlot_2, 
+          labels = c("0", "1", "2"),
+          nrow = params$missed_gens  + 1)
+
+BPlot_0 <- bias_plot(metrics_Poisson[[1]]$metrics_indiv)
+BPlot_1 <- bias_plot(metrics_Poisson[[2]]$metrics_indiv)
+BPlot_2 <- bias_plot(metrics_Poisson[[3]]$metrics_indiv)
+
+plot_grid(BPlot_0, BPlot_1, BPlot_2, 
+          labels = c("0", "1", "2"),
+          nrow = params$missed_gens  + 1)
+```
+
+### Negative Binomial
+```{r, echo = FALSE, fig.width=10,fig.height=25}
+SummPlot_0 <- summary_plot(metrics_NegBinom[[1]]$metrics_summ, include=want)
+SummPlot_1 <- summary_plot(metrics_NegBinom[[2]]$metrics_summ, include=want)
+SummPlot_2 <- summary_plot(metrics_NegBinom[[3]]$metrics_summ, include=want)
+
+plot_grid(SummPlot_0, SummPlot_1, SummPlot_2, 
+          labels = c("0", "1", "2"),
+          nrow = params$missed_gens  + 1)
+
+BPlot_0 <- bias_plot(metrics_NegBinom[[1]]$metrics_indiv)
+BPlot_1 <- bias_plot(metrics_NegBinom[[2]]$metrics_indiv)
+BPlot_2 <- bias_plot(metrics_NegBinom[[3]]$metrics_indiv)
+
+plot_grid(BPlot_0, BPlot_1, BPlot_2, 
+          labels = c("0", "1", "2"),
+          nrow = params$missed_gens  + 1)
+```
+
+
+

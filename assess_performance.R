@@ -13,8 +13,21 @@ mae <- function(error){
 # summarise performance
 performance_metrics <- function(trueR0, estimates, max_weeks, min_peak){
   
+  #estimates=Sim_results[[]]
+  # trueR0=simulations$pars
+  # max_weeks=15 
+  # min_peak=15
+  
   # unlist & bind R0 estimates
+  #https://stackoverflow.com/questions/4227223/convert-a-list-to-a-data-frame
   estimates <- do.call('rbind', estimates)
+  tmp <- colnames(estimates)
+  
+  #fix type so colums are vectors and not lists
+  estimates <- as.data.frame(matrix(unlist(estimates), ncol = 7))
+  colnames(estimates) <- tmp
+  estimates[c("R0", "CI_L", "CI_U", "peak")] <- sapply(estimates[c("R0", "CI_L", "CI_U", "peak")],as.numeric)
+  
   estimates$sim <- substr(estimates$Country, 5, 7)
   
   # merge with actual/true R0 values
@@ -31,13 +44,17 @@ performance_metrics <- function(trueR0, estimates, max_weeks, min_peak){
   missing <- as.data.frame(cbind(sim=estimates$sim[which(is.na(estimates$R0))],
                                  Nweeks=estimates$Nweeks[which(is.na(estimates$R0))]))
   missing <- unique(missing[c("sim", "Nweeks")])
-  for(m in 1:nrow(missing)){
-    estimates <- estimates[!(estimates$sim==missing$sim[m] & estimates$Nweeks==missing$Nweeks[m]), ]
+  if (nrow(missing) > 0){
+    for(m in 1:nrow(missing)){
+      estimates <- estimates[!(estimates$sim==missing$sim[m] & estimates$Nweeks==missing$Nweeks[m]), ]
+      # estimates[!(estimates$sim==as.numeric(missing$sim[m]) & estimates$Nweeks==as.numeric(missing$Nweeks[m])), ]
+    }
   }
-  
+
   #=== Calculate performance metrics
   
   estimates$bias <- estimates$R0 - estimates$R0_true # bias
+  estimates$bias <- as.numeric(estimates$R0) - as.numeric(estimates$R0_true) # bias
   
   estimates$ciW <- estimates$CI_U - estimates$CI_L # width of CI / uncertainty
   
@@ -127,7 +144,7 @@ bias_plot <- function(metrics_indiv){
     scale_fill_manual(values=c("royalblue1", "violetred1", "lawngreen", "orange1", "turquoise1", "purple", "grey60"))+
     scale_colour_manual(values=c("royalblue1", "violetred1", "lawngreen", "orange1", "turquoise1", "purple", "grey60"))+
     theme(legend.position='right', axis.text.y=element_blank(), axis.ticks.y=element_blank())+ 
-    scale_y_discrete(expand=expand_scale(mult=c(0.01, 0.01)), limits=rev(levels(metrics_indiv$method)))
+    scale_y_discrete(expand=expansion(mult=c(0.01, 0.01)), limits=rev(levels(metrics_indiv$method)))
   
   return(plotB)  
 }

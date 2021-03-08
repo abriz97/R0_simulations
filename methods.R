@@ -179,3 +179,7 @@ BR <- function(data, GTd){
 }
 
 
+#=== Helper function to get methods names 
+get_methods <- function() c("EG_Lin", "EG_P", "EG_MLE", "EpiEstim", "WP", "WT", 'BR')
+
+
