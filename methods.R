@@ -3,6 +3,18 @@ Mz_ga <- function(t, r, mean_GT, sd_GT){
   dgamma(t, shape=(mean_GT^2/sd_GT^2), scale=(sd_GT^2/mean_GT))*exp(-t*r)
 }
 
+#=== Helper function to avoid infinities in integrations
+# doesn't seem to work as I want, let s forget about it for the moment.
+integrate_ifcan <- function(method, r){
+  tryCatch(
+    {1/integrate(Mz_ga, r=r, lower=0, upper=Inf, subdivisions=1e8, mean_GT=mean_GT, sd_GT=sd_GT)$value
+    return(TRUE)},
+    error=function(e){
+    print(paste0(method,": Unable to estimate R0 with current data (tryCatch)"))
+    return(FALSE)
+    })
+}
+
 
 #=== 1. Linear exponential growth method
 EG_Lin <- function(data, mean_GT, sd_GT){
@@ -16,12 +28,13 @@ EG_Lin <- function(data, mean_GT, sd_GT){
   }
   
   # define growth rate, r
-  lm_mod <- lm(logcases~ week, data=data)
+  lm_mod <- lm(logcases~ day, data=data)
   r <- coef(lm_mod)[2]
   rciL <- confint(lm_mod, level=0.95)[2,1]
   rciU <- confint(lm_mod, level=0.95)[2,2]
-  
-  if(rciL>-0.37){ 
+
+  #if(integrate_ifcan("EG_Lin", rciL)){ 
+  if (rciL > -.37){
     
     # calculate R by integrating over the GT distribution, g(a)
     R <- 1/integrate(Mz_ga, r=r, lower=0, upper=Inf, subdivisions=1e8, mean_GT=mean_GT, sd_GT=sd_GT)$value
@@ -33,6 +46,7 @@ EG_Lin <- function(data, mean_GT, sd_GT){
     results <- c(R, RciL, RciU)
     
   }else{
+    print("EG_P: Unable to estimate R0 with current data")
     results <- c(NA, NA, NA)
   }
   return(results)
@@ -44,12 +58,12 @@ EG_Lin <- function(data, mean_GT, sd_GT){
 EG_P <- function(data, mean_GT, sd_GT){
   
   # define growth rate, r
-  P_mod <- glm(cases~ week, data=data, family="poisson")
+  P_mod <- glm(cases~ day, data=data, family="poisson")
   r_p <- coef(P_mod)[2]
   rciL <- confint(P_mod, level=0.95)[2,1]
   rciU <- confint(P_mod, level=0.95)[2,2]
   
-  if(rciL>-0.37){
+  if(rciL > -.37){
     
     # calculate R by integrating over the GT distribution, g(a)
     R_p <- 1/integrate(Mz_ga, r=r_p, lower=0, upper=Inf, subdivisions=1e8, mean_GT=mean_GT, sd_GT=sd_GT)$value
@@ -61,6 +75,7 @@ EG_P <- function(data, mean_GT, sd_GT){
     results <- c(R_p, RciL, RciU)
   
   }else{
+    print("EG_P: Unable to estimate R0 with current data")
     results <- c(NA, NA, NA)
   }
   return(results)
@@ -73,7 +88,7 @@ EG_MLE <- function(data, mean_GT, sd_GT){
   
   # define log-likelihood (negative required by mle2)
   ll <- function(I0, r){
-    -sum(data$cases*(r*data$week+log(I0))-I0*exp(r*data$week)-lfactorial(data$cases))
+    -sum(data$cases*(r*data$day+log(I0))-I0*exp(r*data$day)-lfactorial(data$cases))
   }
         
   tryCatch({
@@ -151,6 +166,7 @@ WT <- function(data, GTd){
   if(exists("R0_WTav")==TRUE){
     results <- c(R0_WTav$R, R0_WTav$conf.int)
   }else{
+    warnings("Wallinga & Teunis: R0 estimate not inside confidence interval")
     results <- c(NA, NA, NA)
   }
   return(results)
