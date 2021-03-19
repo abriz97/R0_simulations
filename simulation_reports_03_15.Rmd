@@ -1,0 +1,271 @@
+---
+title: "Simulation Experiments"
+author: "Andrea Brizzi"
+date: "16/03/2021"
+output: html_document
+params:
+  methods: ['EG_Lin','EG_P', 'EpiEstim', 'WP', 'WT', 'BR']
+  n_sims: 250
+  missed_gens: 2
+  R0: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Call required packages
+library(dplyr)
+library(bbmle)
+library(EpiEstim)
+library(R0)
+library(ggplot2)
+library(ggridges)
+library(deSolve)
+library(truncnorm)
+library(cowplot)
+
+# specify repository path
+repo_path <- '~/Documents/mini_project_2/R0_simulations/'
+setwd(repo_path)
+results_path <- '~/Documents/mini_project_2/R0_simulations/data/'
+
+# source functions for estimating R0 & data simulation
+source('methods.R')
+source('fit_R0_seq.R')
+#source('data_simulation.R')
+source('assess_performance.R')
+source('simulation.R')
+```
+
+## Settings
+
+The objective of this html report is to document the results of each simulation.
+Here we define the settings of each simulation.
+
+Time is measured in terms of days.
+Data is simulated according to a stochastic SEIR model as in Gnostic et al., and I modified Ed Baskervilles' code.
+We assume the disease has mean exposure of 3 days and mean infectiousness of 4 days,
+implying an average generation time of 7 days/ 1 week
+
+This time, we assume fixed $R_0 = $ `r params$R0`` and assume an ideal scenario with reporting fraction of $100 \%$.
+
+```{r}
+gen_interval <- 7
+R_0 = params$R0
+
+simulations <- simulate_seir_stochastic(N = params$n_sims,
+                                        arnaught = R_0,
+                                        gamma = 1/3, sigma = 1/3.5,
+                                        Reporting_fraction = 1,
+                                        min_peak = 0)
+# In case we would like to simulate something that looks more like COVID, it would
+# make more sense to take a look at daily incidence, and modify quite a few things.
+```
+
+We fit all different models assuming a gamma generation interval distribution with
+mean 6.5 days and standard deviation of 0.62 days, as in Flaxman et al.
+```{r}
+GTd <- R0::generation.time("gamma", c(6.5, 0.62))
+```
+
+
+## R estimates
+
+Now that we only have one level of noise, we don't have to go over a threefold loop.
+
+In this experiment, I wanted to look at the effect of missed generations.
+To do so, I firstly simulate the data as in Megan's paper, and then trim off them
+the data for 0, 1, 2 generation intervals.
+I fit the methods to each of these dataset and hopefully get some results later on.
+```{r, ,warning=FALSE,message=FALSE,error=FALSE, results='hide'}
+# list to store results from simulations
+Sim_results <- list()
+
+
+for (gen in 0:params$missed_gens){
+    # Missed generations parameter
+    
+    results_gen <- list()
+    
+  
+  # for each of the simulations
+  for(j in 1:ncol(simulations$sims)){
+    
+    # data for fitting - simulation j with noise level i
+    sim_j <- data.frame(day = 1:nrow(simulations[[1]]), cases=simulations[[1]][ ,j],
+                         country=paste("sim", j, sep='_'))
+    
+    # cut out the first n_generations
+    sim_j_gen <- sim_j %>% filter(day > gen_interval * gen)
+    
+    # start from first observations:
+    sim_j_gen <- filter(sim_j_gen, cumsum(cases) > 0)
+    
+
+    
+    if(dim(sim_j_gen)[1] != 0){
+      
+      # fit & store results
+      results_gen[[j]] <- fit_R0_seq(data=sim_j_gen, 
+                          mean_GT=6.5, sd_GT=0.62, GTd=GTd, GT_days=7,
+                          methods = params$methods)
+      
+    } 
+    
+  }
+  
+    #store results from each missed_gen cut off
+    Sim_results[[gen + 1]] <- results_gen
+    
+  }
+
+# Save results so we can analyse them if needed
+saveRDS(Sim_results, file.path(results_path, "results.rds"))
+```
+At the moment I cannot seem to have EG_MLE working. WHY? Is it really important?
+
+## Results{.tabset}
+
+We now want to study the impact of having missed the first generations of infections.
+Does this affect the estimate of $R_t$? Does this affect the uncertainty around the estimates?
+
+To do, let us first detect all the simulations for which we are able to produce estimates for 0, 1 and 2 missed generations (note that we report the `i` as well to distinguish between the above types). \\
+
+```{r}
+first_predictions <- data.frame()
+indices = c()
+
+# For each simulation
+for (i in 1: length(Sim_results[[3]])){
+  
+  # if we are able to obtain estimates with 2 missed generations
+  if (! is.null(Sim_results[[3]][[i]])){
+    
+    indices = c(indices, i)
+    
+    # attach first predictions when we don't miss any data
+    tmp <- as.data.frame(Sim_results[[1]][[i]])
+    tmp <- filter(tmp, `#GTofData` == 2)
+    tmp$missed_gens <- 0
+    first_predictions = rbind(first_predictions, tmp)
+    
+    # attach first predictions when we miss 1 week
+    tmp <- as.data.frame(Sim_results[[2]][[i]])
+    tmp <- filter(tmp, `#GTofData` == 2)
+    tmp$missed_gens <- 1
+    first_predictions = rbind(first_predictions, tmp)
+    
+    # attach first predictions when we miss 2 weeks
+    tmp <- as.data.frame(Sim_results[[3]][[i]])
+    tmp <- filter(tmp, `#GTofData` == 2)
+    tmp$missed_gens <- 2
+    first_predictions = rbind(first_predictions, tmp)
+    
+  }
+}
+rownames(first_predictions) <- NULL
+```
+We have a sample size of `r length(indices)` obtained with `r simulations$n_tries` trials.
+
+### Boxplots of R0_estimates
+What do we expect in a scenario with 100 \% reporting rate? There may be a tradeoff between more data for more missed generation vs better assumptions for no missing gens.
+
+
+Now, we want to compare how our estimates of $R_0$ change for each method
+```{r}
+first_predictions$R0 <- as.numeric(first_predictions$R0)
+first_predictions$Ndays <- as.numeric(first_predictions$Ndays)
+sort(unique(first_predictions$Ndays))
+
+
+df_eglin <- filter(first_predictions, method == "EG_Lin")
+ggplot(df_eglin, aes(x = as.factor(missed_gens), y = R0)) + ggtitle("EG_Lin") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+df_egp <- filter(first_predictions, method == "EG_P")
+ggplot(df_egp, aes(x = as.factor(missed_gens), y = R0)) + ggtitle("EG_P") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+df_EpiEstim <- filter(first_predictions, method == "EpiEstim")
+ggplot(df_eglin, aes(x = as.factor(missed_gens), y = R0)) +  ggtitle("EpiEstim") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+df_WP <- filter(first_predictions, method == "WP")
+ggplot(df_WP, aes(x = as.factor(missed_gens), y = R0)) +  ggtitle("WP") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+df_WT <- filter(first_predictions, method == "WT")
+ggplot(df_WT, aes(x = as.factor(missed_gens), y = R0)) + ggtitle("WT") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+df_BR <- filter(first_predictions, method == "BR") 
+ggplot(df_WT, aes(x = as.factor(missed_gens), y = R0)) + ggtitle("BR") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+```
+Every boxplot contains the same number of observations. 
+Do we still see a decrease in variance with more missing generations?
+
+
+And show them all together.
+The bias seems a little bit too large. Let us use all the data if $R_t$ is estimated more properly with the maximum number of data points
+```{r}
+final_predictions <- data.frame()
+
+for (j in 1:params$n_sims){
+    tmp <- as.data.frame(Sim_results[[1]][[j]])
+    tmp <- tail(tmp, length(params$methods))
+    final_predictions <- rbind(final_predictions, tmp)
+}
+final_predictions$R0 <- as.numeric(final_predictions$R0)
+final_predictions$method <- unlist(final_predictions$method)
+
+ggplot(final_predictions, aes(x = as.factor(method), y = R0)) + ggtitle("Estimates with all data available") +
+  geom_boxplot() + geom_hline(yintercept = R_0, colour = "red", linetype="dashed")
+
+```
+
+### Coverage analysis
+Check if real value is in the 95% interval.
+```{r}
+CI = first_predictions %>% dplyr:::select(CI_L, CI_U, method)
+CI$inside <- as.numeric(R_0 < CI$CI_U & R_0 > CI$CI_L)
+CI$method <- as.factor(unlist(CI$method))
+CI = CI %>% group_by(method) %>% summarise(inside = mean(inside))
+
+ggplot(CI, aes(x = method ,y = inside, group = method )) + geom_point() + ggtitle('Proportion of results which contain true value')
+
+CI_final = final_predictions %>% dplyr:::select(CI_L, CI_U, method)
+CI_final$inside <- as.numeric(R_0 < CI_final$CI_U & R_0 > CI_final$CI_L)
+CI_final$method <- as.factor(unlist(CI_final$method))
+CI_final = CI_final %>% group_by(method) %>% summarise(inside = mean(inside))
+
+ggplot(CI_final, aes(x = method ,y = inside, group = method )) + geom_point() + ggtitle('FINAL: Proportion of results which contain true value')
+```
+
+
+## Just a little maths: Probability of immediate extinction of the disease
+
+While trying to play around with the simulations, I noted that even with $R_0 = 2$, quite a few simulations did not produce any new observations
+This corresponds to a case in which the epidemic dies out immediately.
+
+How likely are we to observe such an event? Here I estimate this probability making use of a 'random walk' approximation.
+
+List all infection and recovery events, and denote by $X_n$ the number of infected and exposed individuals at the time of the $n^{th}$ event ($X_n := E_n + I_n$).
+Now, the probability of an infection dying out correspond to the event $\{X_n = 0 \text{ eventually} \}$.
+Further, by the property of exponential random variables, we have:
+$$
+\mathbb{P} [X_{n+1} = X_n + 1] = \mathbb{P} [\text{next event is } S \xrightarrow{} E] = \frac{ \beta I_n S_n }{\beta I_n S_n + \gamma I_n N}
+$$
+Assuming a large population where the number of infections is negligible ($\frac{S_n}{N} \xrightarrow{} 1$ as $N \xrightarrow{} \infty$), we obtain:
+$$
+\mathbb{P} [X_{n+1} = X_n + 1] \approx \pi := \frac{\beta}{\beta + \gamma} = \frac{R_0}{R_0 + 1}
+$$
+Where we used the relationship between $\beta= R_0 \gamma$.
+Using this approximation, the probability of stepping up or down is constant, independent of $n$ and $X$.
+This allows us to compute the probability of extinction of the disease as a ruin probability:
+$$
+p_k := P[X_n = 0 \text{ eventually } | X_0 = k] = \left( \frac{1-\pi}{\pi} \right)^k = R_0^{-k}
+$$
+With $k = 10$ and $R_0 = 2$ this probability is around $1/1000$.
+
+PS: it is true than in any epidemic with finite population $X_n = 0$ eventually, but this may be due to the fact that there is no one left to infect. In a "finite scenario", I suggest to interpret the above probability as the probability of an epidemic dying out infecting a negligible part of the population.
