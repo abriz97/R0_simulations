@@ -1,0 +1,220 @@
+---
+title: "Producing Simulations"
+author: "Andrea Brizzi"
+date: "22/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Call required packages
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(knitr)
+
+# specify repository path
+repo_path <- '~/Documents/mini_project_2/R0_simulations/'
+setwd(repo_path)
+data_path <- '~/Documents/mini_project_2/R0_simulations/data/'
+
+# load scripts necessary for simulations
+source('simulation.R')
+source('BP_simulation.R')
+```
+
+## Intro
+The objective of this Markdown file is to show how to produce simulations according to different models.
+Having obtained a 100 simulations for each setting, we then plot them, produce summary statistics and save these.
+
+We include two different types of simulating mechanism:
+
+ * Stochastic SEIR model
+ * Branching Process with Gamma Generation Intervals and Poisson distributed offspring
+
+For each of the two methods, we produce simulations with different $R_0$ values, with values $1.5, 2.0, 2.5, 3.0$.
+Concerning the SEIR model, we also consider populations of different sizes: $10^4$ and $10^6$.
+
+This is how I produced the simulations:
+```{r, eval = FALSE}
+# Initialise lists to store results 
+sims_SEIR <- list()
+sims_BP <- list()
+
+# Specify different scenarios
+R0_vec <- c(1.5, 2, 2.5, 3)
+pops_vec <- c(10^4, 10^6)
+
+for (R0 in R0_vec){
+  
+  # prepare names for lists
+  name = paste0('R0=', R0)
+  
+  # simulate Branching Process 
+  sims_BP[[name]] <- simulation_BP(N = 100, R0 = R0, seeds = 5)
+  
+  for (pop in pops_vec){
+    
+    # prepare name for lists:
+    name2 = paste0(name, 'pop=', pop)
+    
+    # simulate SEIR
+    sims_SEIR[[name2]] <- simulate_seir_stochastic(N = 100, arnaught = R0, 
+                                          gamma = 1/3, sigma = 1/3.5,
+                                          Reporting_fraction = 1,
+                                          N0_par = pop,
+                                          I0_par = 5)$sims
+  }
+}
+
+saveRDS(object = sims_BP, file.path(data_path, "sims_BP"))
+saveRDS(object = sims_SEIR, file.path(data_path, "sims_SEIR"))
+```
+
+
+## Analyse trajectories{.tabset}
+Having saved the simulations, we are now able to load them:
+```{r}
+sims_BP <- readRDS(file.path(data_path, "sims_BP"))
+sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
+```
+And we can proceed to plot the different trajectories
+
+### Branching Process
+
+Here are the results obtained through a Branching process simulation with:
+
+ * Generation Intervals following a discretised Gamma distribution with mean 6.5 and standard deviation 0.62.
+ * Number of secondary infections distributed as a Poisson with mean given by $R_0$.
+ 
+```{r, out.width= "100%"}
+data = as.data.frame(sims_BP$`R0=1.5`)
+data$time = 1:length(data$sim1)
+data.plot <- reshape2:::melt.data.frame(data = data, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+ggplot(data.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Branching Process, R0 = 1.5")
+
+
+data = as.data.frame(sims_BP$`R0=2`)
+data$time = 1:length(data$sim1)
+data.plot <- reshape2:::melt.data.frame(data = data, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+ggplot(data.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Branching Process, R0 = 2")
+
+data = as.data.frame(sims_BP$`R0=2.5`)
+data$time = 1:length(data$sim1)
+data.plot <- reshape2:::melt.data.frame(data = data, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+ggplot(data.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Branching Process, R0 = 2.5")
+
+data = as.data.frame(sims_BP$`R0=3`)
+data$time = 1:length(data$sim1)
+data.plot <- reshape2:::melt.data.frame(data = data, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+ggplot(data.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Branching Process, R0 = 3")
+
+```
+
+The "waviness" of the trajectories is due to the relatively small variance of the generation Interval, so that almost every generation lasts 6 to 8 days, additionally to the seeds assumed to all be introduced on day 0.
+I could probably improve that by seeding 1 infection on the first 6 days.
+
+### Stochastic SEIR
+
+The stochastic SEIR simulations are in a way more realistic, as they assume a finite population in which the pathogen can spread. For this reason, these will present a peak and a slowing down of infections.
+```{r, out.width= "100%"}
+data1 = sims_SEIR$`R0=1.5pop=10000`
+data1$time <- 1:length(data1$sim1)
+data1.plot <- reshape2:::melt.data.frame(data = data1, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+data2 = sims_SEIR$`R0=1.5pop=1e+06`
+data2$time <- 1:length(data2$sim1)
+data2.plot <- reshape2:::melt.data.frame(data = data2, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+gg1 <- ggplot(data1.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 1.5, N = 10^4")
+gg2 <- ggplot(data2.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 1.5, N = 10^6")
+gridExtra:::grid.arrange(gg1, gg2, ncol = 2)
+
+
+data1 = sims_SEIR$`R0=2pop=10000`
+data1$time <- 1:length(data1$sim1)
+data1.plot <- reshape2:::melt.data.frame(data = data1, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+data2 = sims_SEIR$`R0=2pop=1e+06`
+data2$time <- 1:length(data2$sim1)
+data2.plot <- reshape2:::melt.data.frame(data = data2, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+gg1 <- ggplot(data1.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 2, N = 10^4")
+gg2 <- ggplot(data2.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 2, N = 10^6")
+gridExtra:::grid.arrange(gg1, gg2, ncol = 2)
+
+data1 = sims_SEIR$`R0=2.5pop=10000`
+data1$time <- 1:length(data1$sim1)
+data1.plot <- reshape2:::melt.data.frame(data = data1, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+data2 = sims_SEIR$`R0=2.5pop=1e+06`
+data2$time <- 1:length(data2$sim1)
+data2.plot <- reshape2:::melt.data.frame(data = data2, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+gg1 <- ggplot(data1.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 2.5, N = 10^4")
+gg2 <- ggplot(data2.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 2.5, N = 10^6")
+gridExtra:::grid.arrange(gg1, gg2, ncol = 2)
+
+data1 = sims_SEIR$`R0=3pop=10000`
+data1$time <- 1:length(data1$sim1)
+data1.plot <- reshape2:::melt.data.frame(data = data1, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+data2 = sims_SEIR$`R0=3pop=1e+06`
+data2$time <- 1:length(data2$sim1)
+data2.plot <- reshape2:::melt.data.frame(data = data2, id.vars = "time" ,
+                                        variable.name = "simulation", value.name = "incidence")
+gg1 <- ggplot(data1.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 3, N = 10^4")
+gg2 <- ggplot(data2.plot, aes(x = time, y = incidence, group = simulation, color = simulation)) + geom_line() +  theme(legend.position = "none") + ggtitle("Stochastic SEIR: R0 = 3, N = 10^6")
+gridExtra:::grid.arrange(gg1, gg2, ncol = 2)
+
+```
+
+The above plots show how the population sizes have a very big impact on the evolution of the incidence even when $R_0$ is identical. 
+We conclude by summarizing some key statistics of the different simulations:
+
+* Peak day
+* Peak value
+* Proportion of died out epidemics
+
+```{r, out.width= "100%"}
+data <- sims_SEIR
+names <- names(data)
+table <- data.frame(name = as.character(), min_peak_day = as.numeric(),
+                    max_peak_day = as.numeric(), min_peak = as.numeric(), max_peak = as.numeric(),
+                    proportion_flat = as.numeric())
+cnames <- colnames(table)
+
+#Function outputting peak info and indicator on flat trajectory
+summarise <- function(x){
+  peak_value = max(x)
+  if (peak_value > 10){ # Maybe define a better way to indicate 'immediate extinction'
+    peak_day = which.max(x)[1]
+    flat = 0
+  }else{
+    peak_value = NA
+    peak_day = NA
+    flat = 1
+  }
+  return(c(peak_day, peak_value, flat))
+}
+
+# Produce table
+for (name in names){
+  tmp <- data[[name]]
+  tmp <- t(apply(tmp, 2, FUN = summarise))
+  colnames(tmp) <- c('peak_day', 'peak_value', 'flat_indicator')
+  
+  # Summarise results 
+  tmp <- c(name, range(tmp[,1], na.rm = TRUE), range(tmp[,2], na.rm = TRUE), mean(tmp[,3]))
+  table <- rbind(table, tmp)
+}
+colnames(table) <- cnames
+kable(table)
+
+```
+
