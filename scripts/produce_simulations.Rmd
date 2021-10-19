@@ -17,11 +17,11 @@ library(knitr)
 # specify repository path
 repo_path <- '~/Documents/mini_project_2/R0_simulations/'
 setwd(repo_path)
-data_path <- '~/Documents/mini_project_2/R0_simulations/data/'
+data_path <- file.path(repo_path, 'data')
 
 # load scripts necessary for simulations
-source('simulation.R')
-source('BP_simulation.R')
+source('scripts/simulation.R')
+# source('BP_simulation.R')
 ```
 
 ## Intro
@@ -70,6 +70,26 @@ for (R0 in R0_vec){
 
 saveRDS(object = sims_BP, file.path(data_path, "sims_BP"))
 saveRDS(object = sims_SEIR, file.path(data_path, "sims_SEIR"))
+
+
+# Now simulations with large number of seeds (100)
+SEIR_largeseeds <- list()
+R0_vec <- c(0.75,1,1.5, 2, 2.5)
+
+for (R0 in R0_vec){
+  
+  name = paste0('R0=', R0)
+  
+  # simulate SEIR
+    SEIR_largeseeds[[name]] <- simulate_seir_stochastic(N = 100, arnaught = R0, 
+                                          gamma = 1/3, sigma = 1/3.5,
+                                          Reporting_fraction = 1,
+                                          N0_par = 10^6,
+                                          I0_par = 100)$sims
+  
+  
+}
+saveRDS(object = SEIR_largeseeds, file.path(data_path, "SEIR_largeseeds"))
 ```
 
 

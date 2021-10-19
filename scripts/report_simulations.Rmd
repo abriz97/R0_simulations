@@ -210,7 +210,8 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
-
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
 
 ```
 
@@ -514,6 +515,8 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
 ```
 
 ### rho = 0.15
@@ -667,6 +670,8 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
 ```
 
 ### Coverage and CI width plot

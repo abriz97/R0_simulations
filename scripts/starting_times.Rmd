@@ -1,0 +1,223 @@
+---
+title: "Report Simulations"
+author: "Andrea Brizzi"
+date: "21/04/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Dependencies
+require(EpiEstim)
+require(dplyr)
+require(ggplot2)
+require(png)
+require(ggpubr)
+
+# set up directories' paths
+repo_path <- '~/Documents/mini_project_2/R0_simulations'
+setwd(repo_path)
+data_path <- '~/Documents/mini_project_2/R0_simulations/data/'
+plots_path <- '~/Documents/mini_project_2/plots'
+
+# sources 
+source("methods.R")
+
+# extracts legend
+g_legend<-function(a.gplot){
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)}
+
+MGF_integral <- function(x, mean_GT, sd_GT){
+  
+  shape <- (mean_GT^2/sd_GT^2)
+  scale <- (sd_GT^2/mean_GT)
+  out <- c()
+  
+  for (r in x){
+    if (r > -1/scale){
+      out <- c(out, (1 - scale * (-r))^(-shape) )
+    }else{
+      out <- c(out, NA)
+    }
+  }
+  
+  return(out)
+}
+```
+
+
+In this report, we want to compare different estimates of EpiEstim and Exponential Growth in different scenarios.
+We assume a perfect reporting rate $\rho = 100 \%$, and see how estimates evolve when missing 0/2/4 generations of infections, with and without adjustment.
+
+The aim is to 'value' the contribution of our adjustment as well as characterise the biases due to either low numbers of data points, or missing generations.
+
+We start by loading up the data as always.
+
+```{r}
+sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
+names <- names(sims_SEIR)[c(2,4,6,8)]
+
+# generation interval parameters
+mean_si <- 6.5
+sd_si <- sqrt(3^2 + 3.5^2)
+
+# reporting rate
+rho <- 1
+```
+
+Now we move to apply our methods to the simulations.
+Should I write a function that does that?
+Consider adding a condition which does not allow to estimate when there are too little cases.
+
+```{r}
+
+results <- data.frame(trueR0 = as.numeric(),
+                      missedGens = as.numeric(),
+                      week_of_estimate = as.numeric(),
+                      method = as.character(),
+                      estR0 = as.numeric(),
+                      lowCI = as.numeric(),
+                      upCI = as.numeric())
+
+
+for (name in names){
+  
+  # extract true R0
+  trueR0 <- as.numeric(stringr::str_match(name, "R0=\\s*(.*?)\\s*pop")[2])
+    
+  # Get simulations with given R0 and focus on first 6 weeks anyways 
+  df <- sims_SEIR[[name]][1:(7*6),]
+  
+  for (sim in 1:100){
+    
+    incidence <- df[, sim]
+    incidence <- data.frame(cases = incidence, day = seq_along(incidence))
+    
+    # For every option of missed generations get estimates from first available data to the end
+    for (miss_gens in c(0,1,2)){
+      
+      data <- filter(incidence, day >= miss_gens * 7)
+      
+      # define 14 days sliding windows on which to estimate.
+      # Inside [] we have the function mapping the n of missgens to the number of possible intervals
+      # 0 -> 3; 2 -> 2; 4 -> 1
+      # 0 -> 3; 1 -> 2; 2 -> 1
+      n_intervals <- 3 - miss_gens
+      t_start <- c(2, 8, 15)[1:n_intervals] 
+      t_end <- c(14, 21, 28)[1:n_intervals] 
+      
+      # == Apply normal EpiEstim
+      epestim <- EpiEstim::estimate_R(c(data$cases), method = "parametric_si",
+                           config = make_config(
+                             list(
+                               mean_si = mean_si,
+                               std_si = sd_si,
+                               t_start = t_start,
+                               t_end = t_end
+                             )))$R[,c("Mean(R)", "Quantile.0.025(R)", "Quantile.0.975(R)")]
+      
+      # put in right format
+      names(epestim) <- c('estR0', 'lowCI', 'upCI')
+      epestim$week_of_estimate <- (3-n_intervals):2
+      epestim$method <- 'EpiEstim'
+      
+      
+      # == Apply EpiEstim adjusted
+      
+      # extend the data for required number of days.
+      tmp <- data[1:14,]
+      
+      if(any(tmp$cases==0)){
+        tmp$casesC <- tmp$cases+0.5
+        tmp$logcases <- log(tmp$casesC)
+      }else{
+        tmp$logcases <- log(tmp$cases)
+      }
+      
+      # EG_growth
+      exp_fit <- lm(logcases ~ day, data = tmp)
+      1/MGF_integral(exp_fit$coefficients[2], mean_GT = mean_si, sd_GT = sd_si)
+      1/MGF_integral(confint(exp_fit, level=0.95)[2, c(1,2)], mean_GT = mean_si, sd_GT = sd_si)
+      
+      # introduce extrapolated data
+      day0 <- data$day[1] - 1
+      tmp <- data.frame(day =  (-21):0 + day0,
+                        logcases = predict.lm(exp_fit, newdata = data.frame(day = (-21):0  + day0 )))
+
+      if (any(data[1:14,]$cases==0)){
+        tmp$casesC <- exp(tmp$logcases)
+        tmp$cases <- tmp$casesC - 0.5
+        tmp$cases[tmp$cases < 0] <- 0
+      }else{
+        tmp$cases <- exp(tmp$logcases)
+      }
+    
+      data <- rbind(tmp[,c('cases', 'day')], data)
+      
+      # adjust windows 
+      t_start[1] <- 1
+      t_start <- t_start + dim(tmp)[1]
+      t_end <- t_end + dim(tmp)[1]
+      
+      epestim_adj <- EpiEstim::estimate_R(c(data$cases), method = "parametric_si",
+                           config = make_config(
+                             list(
+                               mean_si = mean_si,
+                               std_si = sd_si,
+                               t_start = t_start,
+                               t_end = t_end
+                             )))$R[,c("Mean(R)", "Quantile.0.025(R)", "Quantile.0.975(R)")]
+
+      # put in right format
+      names(epestim_adj) <- c('estR0', 'lowCI', 'upCI')
+      epestim_adj$week_of_estimate <- (3-n_intervals):2
+      epestim_adj$method <- 'EpiEstim_adj'
+      
+      tmp <- rbind(epestim, epestim_adj)
+      tmp$trueR0 <- trueR0
+      tmp$missedGens <- miss_gens
+      
+      results <- rbind(results, tmp)
+    }
+    
+  }
+} 
+```
+
+Now that we have the results, we can analyze them. Let us focus with a relatively high R0.
+
+```{r}
+R0VALUE <- 2.5
+
+analysis <- filter(results, trueR0 == R0VALUE)
+analysis <- analysis %>% group_by(missedGens, week_of_estimate, method)
+analysis$week_of_estimate <- as.factor(analysis$week_of_estimate)
+analysis$week_of_estimate <- as.factor(plyr::revalue(analysis$week_of_estimate,
+                                                     c("0"="0-2", "1"="1-3", "2"="2-4")))
+
+analysis$missedGens <- as.factor(analysis$missedGens)
+
+analysis$method <- gsub('EpiEstim_adj', 'EpEsAd', analysis$method)
+analysis$method <- gsub('EpiEstim', 'EpEs', analysis$method)
+gg <- ggplot(filter(analysis), aes(x = week_of_estimate, y = estR0, fill = method, color = method))  +
+  geom_violin() + 
+  geom_hline(aes(yintercept = R0VALUE), linetype = 'dashed') + 
+  facet_grid(rows = vars(missedGens)) + 
+  theme_bw() + xlab('window used') + ylab(expression("R"[0])) + theme(legend.position = 'bottom')
+gg
+ggsave(file.path(plots_path, 'figure4.png'), w = 8, h = 6.5)
+a <- analysis %>%  summarise( bias = mean(estR0) - trueR0,
+                              CIwidth = mean(upCI - lowCI),
+                              coverage = mean(trueR0 <= upCI & trueR0 >= lowCI))
+
+a <- unique(a)
+
+
+```
+
+
+
