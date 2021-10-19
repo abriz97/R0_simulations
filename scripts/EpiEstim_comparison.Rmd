@@ -1,0 +1,172 @@
+---
+title: "Adjustment comparison"
+author: "Andrea Brizzi"
+date: "21/04/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Dependencies
+require(EpiEstim)
+require(dplyr)
+require(ggplot2)
+require(png)
+require(ggpubr)
+
+# set up directories' paths
+repo_path <- '~/Documents/mini_project_2/R0_simulations'
+setwd(repo_path)
+data_path <- file.path(repo_path, 'data')
+plots_path <- '~/Documents/mini_project_2/plots'
+
+# sources
+source("scripts/methods.R")
+```
+
+Want to compare trajectory of EpiEstim estimates WITH and WITHOUT adjustment.
+Let s use a sliding windows of 7 days?
+
+```{r}
+sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
+names <- names(sims_SEIR)
+
+# generation interval parameters
+mean_si <- 6.5
+sd_si <- sqrt(3^2 + 3.5^2)
+
+# pop = 10^6 and R0 = ? and reporting rate
+name <- names[6]
+df <- sims_SEIR[[name]]
+rho <- 1
+WINDOWS <- 7
+trueR0 <- as.numeric(gsub('R0=(.*?)pop=(.*?)$', '\\1',name))
+
+# chose a simulation from 1 to 100
+sim <- 97
+incidence <- df[, sim]
+
+incidence <- data.frame(cases = incidence, day = seq_along(incidence))
+incidence$trueRt <- trueR0 * (1-cumsum(incidence$cases)/1000000)
+
+incidence$cases <- rbinom(n = length(incidence$cases),
+                              size = incidence$cases,
+                              prob = rho)
+
+# truncate 
+incidence <- filter(incidence, day >= 14)
+first_day <- min(incidence$day)
+
+# == apply normal EpiEstim
+t_start <- 2:(length(incidence$cases) - WINDOWS)
+t_end <- t_start + WINDOWS 
+
+# add seeds...
+epestim <- EpiEstim::estimate_R(c(incidence$cases), method = "parametric_si",
+                           config = make_config(
+                             list(
+                               mean_si = mean_si,
+                               std_si = sd_si,
+                               t_start = t_start,
+                               t_end = t_end
+                             )))$R[,c("Mean(R)", "Quantile.0.025(R)", "Quantile.0.975(R)")]
+
+epestim$day <- t_end + first_day - 1 
+
+
+# == Apply adjusted EpiEstim, using first 2 weeks to infer r.
+
+# log transform cases, add small constant to time-series if zeros are present
+if(any(incidence$cases==0)){
+  incidence$casesC <- incidence$cases+0.5
+  incidence$logcases <- log(incidence$casesC)
+}else{
+  incidence$logcases <- log(incidence$cases)
+}
+  
+# Fit line through logged cases
+exp_fit <- lm(logcases ~ day, data = filter(incidence, day >= first_day & day <= first_day + 13))
+
+# introduce extrapolated data
+tmp <- data.frame(day =  first_day - 1 + (-21):0)
+tmp$logcases <- predict.lm(exp_fit, newdata = data.frame(day =  first_day - 1 + (-21):0 ))
+if ("casesC" %in% names(incidence)){
+  tmp$casesC <- exp(tmp$logcases)
+  tmp$cases <- tmp$casesC - 0.5
+  tmp$cases[tmp$cases < 0] <- 0
+}else{
+  tmp$cases <- exp(tmp$logcases)
+}
+tmp$trueRt <- trueR0
+
+
+incidence <- rbind(tmp, incidence)
+
+# define windows
+START <- which(incidence$day == first_day)
+t_start <- START:(length(incidence$cases) - WINDOWS)
+t_end <- t_start + WINDOWS 
+
+# add seeds...
+epestim_adj <- EpiEstim::estimate_R(c(incidence$cases), method = "parametric_si",
+                           config = make_config(
+                             list(
+                               mean_si = mean_si,
+                               std_si = sd_si,
+                               t_start = t_start,
+                               t_end = t_end
+                             )))$R[,c("Mean(R)", "Quantile.0.025(R)", "Quantile.0.975(R)")]
+
+epestim_adj$day <- t_end - START + first_day
+
+
+
+# Now compare?
+
+# assign each estimate to the middle of the sliding window:
+epestim$day <- epestim$day - WINDOWS/2
+epestim_adj$day <- epestim_adj$day - WINDOWS/2
+
+epestim$type = 'Unadjusted'
+epestim_adj$type = 'Adjusted'
+data <- rbind(epestim, epestim_adj)
+colnames(data) <- c('M', 'Low', 'Up', 'day', 'type')
+data$type <- gsub('Adjusted','EpEsAdj',data$type)
+data$type <- gsub('Unadjusted', 'EpEs', data$type)
+
+gg <- ggplot(data, aes(x = day)) + 
+  geom_ribbon(aes(ymin = Low , ymax = Up, color = type, fill = type), alpha = .3 ) +
+  geom_line(aes(y = M, color = type), linetype = 'dashed') + 
+  geom_line(data = incidence, aes(x = day, y = trueRt)) + xlim(c(14, 75)) +
+  scale_fill_manual(values = c(5,2)) + 
+  scale_color_manual(values = c(5,2)) +
+  theme_classic2() + theme(legend.position = 'bottom') +
+  labs(y= expression("R"[t]), x='day', fill ='', color ='')
+  
+gg <- gg 
+
+rect <- data.frame(xmin=first_day, xmax=first_day + 13, ymin=-Inf, ymax=Inf)
+gg + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax),
+              fill="grey20",
+              alpha=0.5,
+              inherit.aes = FALSE)
+
+incidence$before_first <- (incidence$day <= first_day)
+incidence$before_first  <- sapply(incidence$before_first, FUN = function(x){if(x){'Imputed'}else{'Observed'}})
+gg2 <- ggplot(incidence, aes(x= day, y = logcases, color = before_first )) + 
+  geom_point() + 
+  geom_abline(slope = exp_fit$coefficients[2], intercept = exp_fit$coefficients[1], color = 'darkgreen') +
+  geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax),
+              fill="lightgreen",
+              alpha=0.5,
+              inherit.aes = FALSE) + 
+  theme_classic2() +theme(legend.position = 'bottom') +
+  labs(y = "log(cases)", color = '' ) 
+
+gg <- ggarrange(gg2, gg,
+                 labels="AUTO")
+ggsave(file.path(plots_path, 'effects_adjustment.png'), w=10, h=6)
+```
+
+
