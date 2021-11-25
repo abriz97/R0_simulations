@@ -6,14 +6,24 @@ require(ggplot2)
 require(ggpubr)
 library(cowplot)
 
+# command line parsing if any
+args_line <-  as.list(commandArgs(trailingOnly=TRUE))
+if(length(args_line) > 0) 
+{
+  args <- list()
+  stopifnot(args_line[[1]]=='-M')	
+  stopifnot(args_line[[3]]=='-SD')
+  args$M <- args_line[[2]]
+  args$SD <- args_line[[4]]
+} 
+
+
 
 # set up directories' paths
 repo_path <- '~/Documents/mini_project_2/R0_simulations'
 setwd(repo_path)
 data_path <- file.path(repo_path, 'data')
 plots_path <- '~/Documents/mini_project_2/plots'
-
-
 
 ######################################################
 #############    COVID-19 Analysis       #############
@@ -23,7 +33,7 @@ global_data <- read.csv(file.path(data_path, 'time_series_covid19_confirmed_glob
 global_data <- as.data.table(global_data)
 dim(global_data) # 275 468
 
-colnames(global_data)
+# colnames(global_data)
 # we have 2 columns concerning Country and Regions
 # 2 with Lat and Long which i can forget about
 # The rest are dates, written as X'month'.'day'.'year'
@@ -51,7 +61,7 @@ extract_by_country <- function(country, province = ''){
   }
   
   # Get data in the right format
-  data <- melt(data,
+  data <- melt.data.table(data,
                variable.name = "date",
                value.name = 'cases')
   
@@ -165,8 +175,14 @@ SOURCE = 'Ganyani et al';MEAN = 5.70; SD = 1.72 # (5.7, 1.72)
 
 # SOURCE = 'CV0';MEAN = 4; SD = 2
 # SOURCE = 'CV1';MEAN = 6; SD = 3
-# SOURCE = 'CV2';MEAN = 8; SD = 4
+SOURCE = 'CV2';MEAN = 8; SD = 4
 
+if(is.list(args) & length(args) == 2)
+{
+  MEAN = as.numeric(args$M)
+  SD = as.numeric(args$SD)
+  SOURCE = ''
+}
 
 title <- paste0(SOURCE, ', mean = ', MEAN, ', sd = ', SD)
 
@@ -174,6 +190,7 @@ title <- paste0(SOURCE, ', mean = ', MEAN, ', sd = ', SD)
 
 
 # ITALY
+cat('Plotting Italy\n')
 
 data <- extract_by_country('Italy')
 data <- data[31:50,]
@@ -182,11 +199,16 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 italy_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+italy_res$adjustment2 <- factor(italy_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(italy_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+
+gg <- ggplot(italy_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   ylab('Rt') + xlab('') +
-  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + theme(legend.position = "bottom")
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + theme(legend.position = "bottom") + 
+  labs(fill = 'Method', color='Method')
 
 my_legend <- get_legend(gg)
 
@@ -199,9 +221,11 @@ italy <- annotate_figure(italy, top = 'Italy')
 italy_res$loc <- 'Italy'
 tmp <- which(italy_res$date == min(italy_res$date))
 tmp1 <- which(italy_res$adjustment)
+
 R0_final <- italy_res[intersect(tmp, tmp1),]
 
 # UK 
+cat('Plotting UK\n')
 
 data <- extract_by_country('United Kingdom')[33:60]
 
@@ -210,12 +234,15 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 UK_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+UK_res$adjustment2 <- factor(UK_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-
-gg <- ggplot(UK_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(UK_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   ylab('Rt') + xlab('') +
-  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") + 
+  labs(fill = 'Method', color='Method')
 
 UK <- ggarrange(pp, gg,
                 widths = c(1, 2))
@@ -228,6 +255,7 @@ tmp1 <- which(UK_res$adjustment)
 R0_final <- rbind(R0_final, UK_res[intersect(tmp, tmp1),])
 
 # FRANCE
+cat('Plotting France \n')
 
 data <- extract_by_country('France')
 data <- data[35:60]
@@ -236,12 +264,15 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 france_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+france_res$adjustment2 <- factor(france_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
 
-gg <- ggplot(france_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(france_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') + xlab('') +
-  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
+  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") 
 
 France <- ggarrange(pp, gg,
                     widths = c(1, 2))
@@ -253,6 +284,7 @@ tmp1 <- which(france_res$adjustment)
 R0_final <- rbind(R0_final, france_res[intersect(tmp, tmp1),])
 
 # US
+cat('Plotting US\n')
 
 data <- extract_by_country('US')
 data <- data[39:69]
@@ -262,10 +294,13 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
 
 
 US_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+US_res$adjustment2 <- factor(US_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
 
-gg <- ggplot(US_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(US_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
@@ -280,6 +315,8 @@ R0_final <- rbind(R0_final, US_res[intersect(tmp, tmp1),])
 
 
 # Germany
+cat('Plotting Germany\n')
+
 data <- extract_by_country('Germany')
 data <- data[35:70]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
@@ -287,9 +324,13 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 Ger_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+Ger_res$adjustment2 <- factor(Ger_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(Ger_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+
+gg <- ggplot(Ger_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
@@ -303,6 +344,8 @@ tmp1 <- which(Ger_res$adjustment)
 R0_final <- rbind(R0_final, Ger_res[intersect(tmp, tmp1),])
 
 # Sweden
+cat('Plotting Sweden\n')
+
 data <- extract_by_country('Sweden')
 data <- data[42:80]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
@@ -310,11 +353,14 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 Swe_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+Swe_res$adjustment2 <- factor(Swe_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(Swe_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(Swe_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
-  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
+  theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") 
 
 Sweden <- ggarrange(pp, gg,
                      widths = c(1, 2))
@@ -335,9 +381,12 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 Spain_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+Spain_res$adjustment2 <- factor(Spain_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(Spain_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(Spain_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
@@ -360,9 +409,13 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 Neth_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+Neth_res$adjustment2 <- factor(Neth_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(Neth_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+
+gg <- ggplot(Neth_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
@@ -384,9 +437,12 @@ pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
 
 Denmark_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
+Denmark_res$adjustment2 <- factor(Denmark_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
-gg <- ggplot(Denmark_res, aes(x = date, y = M, color = adjustment, fill = adjustment)) +
+gg <- ggplot(Denmark_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
+  scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   ylab('Rt') +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
@@ -404,16 +460,23 @@ R0_final <- rbind(R0_final, Denmark_res[intersect(tmp, tmp1),])
 
 everything <- ggarrange(italy, France, UK, US, Germany, Sweden, Spain, Netherlands, Denmark,  common.legend = T) 
 everything <- ggarrange(everything, as_ggplot(my_legend), heights = c(97,3), nrow = 2) 
-annotate_figure(everything, top = title)
-
+# annotate_figure(everything, top = title)
 
 final <- ggarrange(italy, UK, Sweden, US, common.legend = T) 
 final <- ggarrange(final, as_ggplot(my_legend), heights = c(95,5), nrow = 2)
 
+cat('plot image')
 ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.png')), final, w=10,h=5)
-ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.png')), final, w=10,h=5)
+ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.pdf')), final, w=10,h=5)
+cat('Saved image\n')
+
+if(is.list(args) & length(args) == 2)
+{
+  stop('Completed')
+}
 
 R0_final
+# saveRDS(R0_final, file.path(plots_path, 'r0_estimates_realdata.rds'))
 
 # ITALY
 

@@ -166,7 +166,8 @@ gg2 <- ggplot(incidence, aes(x= day, y = logcases, color = before_first )) +
 
 gg <- ggarrange(gg2, gg,
                  labels="AUTO")
-ggsave(file.path(plots_path, 'effects_adjustment.png'), w=10, h=6)
+ggsave(file.path(plots_path, 'effects_adjustment.png'), w=10, h=5)
+ggsave(file.path(plots_path, 'effects_adjustment.pdf'), w=10, h=5)
 ```
 
 
