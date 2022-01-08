@@ -15,7 +15,7 @@ The github directory is structured as follows:
 - `report_simulations.Rmd` contains the code to run the simulation experiments.
 - `real_data.R` containst the code to run the analysis on COVID data.
 - `methods.R` contains helper functions that fit different methods for the estimation of $R_0$.
-- `produce_simulations.R` makes use the `simulation.R` script to generate simulated epidemic curves, save them in the data folder and visualise them
+- `generate_simulations.R` makes use the `simulation.R` script to generate simulated epidemic curves, save them in the data folder and visualise them
 
 #### `data`
 
@@ -26,7 +26,7 @@ The github directory is structured as follows:
 
 #### `results`
 
--   `produce_simulations.html` contains information on how the simulated data were obtained.
+-   `generate_simulations.html` contains information on how the simulated data were obtained.
 -   `EpiEstim_comparison.html` compares the estimates otained from EpiEstim and our proposed adjusted method. 
 -   `report_simulations.html` compares the performance of the Linear Exponential Growth method and EpiEstim with and without adjustment on simulated data.
 
