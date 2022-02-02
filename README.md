@@ -14,13 +14,15 @@ The github directory is structured as follows:
 
 - `report_simulations.Rmd` contains the code to run the simulation experiments.
 - `real_data.R` containst the code to run the analysis on COVID data.
+- `sensitivity_subexponential.Rmd` contains the code to run the sub-exponential growth sensitivity analyses. 
 - `methods.R` contains helper functions that fit different methods for the estimation of $R_0$.
 - `generate_simulations.R` makes use the `simulation.R` script to generate simulated epidemic curves, save them in the data folder and visualise them
 
 #### `data`
 
--  `sims_BP` contains epidemics simulated via a Branching Process
--  `sims_SEIR` contains epidemics simulated using a stochastic SEIR model
+-  `sims_BP.rds` contains epidemics simulated via a Branching Process
+-  `sims_SEIR.rds` contains epidemics simulated using a stochastic SEIR model
+-  `sims_SEIR_subexp.rds` contains epidemics simulated using a stochastic SEIR model with non-linear incidence
 -  `time_series_covid19_confirmed_global.csv` contains official COVID-19 incidence data from the Johns Hopkins University
 
 
@@ -28,8 +30,8 @@ The github directory is structured as follows:
 
 -   `generate_simulations.html` contains information on how the simulated data were obtained.
 -   `EpiEstim_comparison.html` compares the estimates otained from EpiEstim and our proposed adjusted method. 
--   `report_simulations.html` compares the performance of the Linear Exponential Growth method and EpiEstim with and without adjustment on simulated data.
-
+-   `report_simulations_SEIR.html` compares the performance of the Linear Exponential Growth method and EpiEstim with and without adjustment on simulated data.
+-   `sensitivity_subexponential.html` compares the performance of the Linear Exponential Growth method and EpiEstim with and without adjustment on simulated data reproducing sub-exponential growth dynamics. 
 
 ### License
 
