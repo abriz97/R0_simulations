@@ -90,19 +90,17 @@ simulate_seir_stochastic <- function(
   gamma,
   sigma,
   arnaught,
+  alpha = 1,
   n_t = 105, 
   n_steps_per_t = 10,
-  Reporting_fraction = 0.1,
+  reporting_fraction = 1,
   min_peak = 0,
   N0_par = 10^6,
   I0_par = 10
 ) {
   
-  # Maybe put something to allow for vectorisation of arnaught
-  if (N %% length(arnaught) != 0){
-    return("N must be divisible by the lenght of arnaught")
-  }
-  
+  if (N %% length(arnaught) != 0){return("N must be divisible by the lenght of arnaught")}
+  if (alpha > 1 | alpha < 0){return("alpha must be a real number between 0 and 1")}
   
   # Model is given by the schema:
   # S   --(beta)->   E   --(sigma)->    I   --(gamma)->   R
@@ -124,7 +122,7 @@ simulate_seir_stochastic <- function(
   step <- function(t, S_prev, E_prev, I_prev) {
     
     # SEIR model
-    dS <- draw(S_prev, beta(t) * I_prev / Npv)
+    dS <- draw(S_prev, beta(t) * I_prev^(alpha) / Npv)
     dIR <- draw(I_prev, gamma)
     dEI <- draw(E_prev, sigma)
     list(
@@ -149,7 +147,7 @@ simulate_seir_stochastic <- function(
   
   while(index != N + 1){
     
-    # take control of initial conditions
+    # initial conditions
     Npv = N0_par
     I_init = I0_par
     S_init = Npv - I_init
@@ -204,7 +202,7 @@ simulate_seir_stochastic <- function(
     # remove first NA
     dEI <- dEI[-1]
     # extract the incidence of infections and multiply by the reporting fraction
-    incidence <- rbinom(n = length(dEI), size = dEI , prob = Reporting_fraction)
+    incidence <- rbinom(n = length(dEI), size = dEI , prob = reporting_fraction)
     
     if( max(incidence) != 0 && min_peak <= which.max(incidence) ){
       
@@ -215,10 +213,9 @@ simulate_seir_stochastic <- function(
       index = index + 1 
     }
     
-  }
-
+  } 
   # return a list of simulated data, with varying noise levels, & parameter values used
-  return(list(sims=sim_data, pars=pars_data, n_tries = n_tries))
+  return(list(sims=sim_data, I=I, pars=pars_data, n_tries = n_tries))
 
 }
 
@@ -336,8 +333,8 @@ simulate_seir_ode <- function(
 # take the new cases, and decide when they will cause new infections:
 # n_parents <- n_parents + rgeneration(incidence[t], t)
 
-rgeneration <- function(n, t, mean = 6.5, sd = .62, par){
-  
+rgeneration <- function(n, t, par, mean = 6.5, sd = 4.61)
+{
   # reparametrise in terms of shape and scale
   sh = mean^2/sd^2
   sc = sd^2/mean
@@ -354,7 +351,8 @@ rgeneration <- function(n, t, mean = 6.5, sd = .62, par){
 }
 
 
-simulation_BP_individual <- function(n_days, R0, seeds, Reporting_fraction = 1){
+simulation_BP_individual <- function(n_days, R0, seeds, reporting_fraction, mean, sd)
+{
   
   # prepare vectors to store results
   n_parents <- rep(0, n_days)
@@ -365,22 +363,23 @@ simulation_BP_individual <- function(n_days, R0, seeds, Reporting_fraction = 1){
   
   for (day in 1:n_days){
     incidence[day] <- sum(rpois(n_parents[day], R0))
-    n_parents <- rgeneration(n = incidence[day], t = day, par = n_parents)
+    n_parents <- rgeneration(n = incidence[day], t = day, par = n_parents, mean=mean, sd=sd)
   }
   
   n_parents <- n_parents[1:n_days]
-  obs_inc <- rbinom(n = n_days, size = incidence, prob = Reporting_fraction)
+  obs_inc <- rbinom(n = n_days, size = incidence, prob = reporting_fraction)
   return(data.frame(day = 1:n_days, n_parents = n_parents, obs_incidence = obs_inc))
 }
 
 
-simulation_BP <- function(N, n_days = 50 , R0 = 3, seeds = 5, Reporting_fraction = 1){
+simulation_BP <- function(N, n_days = 50 , R0 = 3, seeds = 5, reporting_fraction = 1, mean = 6.5, sd = 4.61)
+{
   
   # Prepare list to store all the simulations
   output <- data.frame()
   
   for (i in 1:N){
-    output <- rbind(output, simulation_BP_individual(n_days = n_days, R0 = R0, seeds = seeds, Reporting_fraction = Reporting_fraction)$obs_incidence)
+    output <- rbind(output, simulation_BP_individual(n_days = n_days, R0 = R0, seeds = seeds, reporting_fraction = reporting_fraction, mean=mean, sd=sd)$obs_incidencei)
   }
   
   output <- t(output)
@@ -390,3 +389,9 @@ simulation_BP <- function(N, n_days = 50 , R0 = 3, seeds = 5, Reporting_fraction
   return(output)
   
 }
+
+
+
+
+
+
