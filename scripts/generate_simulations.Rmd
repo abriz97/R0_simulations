@@ -20,8 +20,7 @@ setwd(repo_path)
 data_path <- file.path(repo_path, 'data')
 
 # load scripts necessary for simulations
-source('scripts/simulation.R')
-# source('BP_simulation.R')
+source(file.path(repo_path, 'scripts/simulation.R'))
 ```
 
 ## Intro
@@ -52,24 +51,23 @@ for (R0 in R0_vec){
   name = paste0('R0=', R0)
   
   # simulate Branching Process 
-  sims_BP[[name]] <- simulation_BP(N = 100, R0 = R0, seeds = 5)
+  # sims_BP[[name]] <- simulation_BP(N = 100, R0 = R0, seeds = 5, mean = 6.5, sd=sqrt(3^2 + 3.5^2) )
   
   for (pop in pops_vec){
     
     # prepare name for lists:
     name2 = paste0(name, 'pop=', pop)
     
-    # simulate SEIR
-    sims_SEIR[[name2]] <- simulate_seir_stochastic(N = 100, arnaught = R0, 
+    sims_SEIR[[name2]] <- simulate_seir_stochastic(N = 500, arnaught = R0,
                                           gamma = 1/3, sigma = 1/3.5,
-                                          Reporting_fraction = 1,
+                                          alpha=1,
                                           N0_par = pop,
                                           I0_par = 5)$sims
   }
 }
 
-saveRDS(object = sims_BP, file.path(data_path, "sims_BP"))
-saveRDS(object = sims_SEIR, file.path(data_path, "sims_SEIR"))
+saveRDS(object = sims_BP, file.path(data_path, "sims_BP.rds"))
+saveRDS(object = sims_SEIR, file.path(data_path, "sims_SEIR.rds"))
 
 
 # Now simulations with large number of seeds (100)
@@ -105,7 +103,7 @@ And we can proceed to plot the different trajectories
 
 Here are the results obtained through a Branching process simulation with:
 
- * Generation Intervals following a discretised Gamma distribution with mean 6.5 and standard deviation 0.62.
+ * Generation Intervals following a discretised Gamma distribution with mean 6.5 and standard deviation sqrt(3^2+3.5^2).
  * Number of secondary infections distributed as a Poisson with mean given by $R_0$.
  
 ```{r, out.width= "100%"}

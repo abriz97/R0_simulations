@@ -16,20 +16,22 @@ require(png)
 require(ggpubr)
 
 # set up directories' paths
-repo_path <- '~/Documents/mini_project_2/R0_simulations'
-setwd(repo_path)
+repo_path <- '/home/andrea/Documents/mini_project_2/R0_simulations'
 data_path <- file.path(repo_path, 'data')
-plots_path <- '~/Documents/mini_project_2/plots'
+plots_path <- '/home/andrea/Documents/mini_project_2/plots'
 
 # sources
-source("scripts/methods.R")
+source(file.path(repo_path,"scripts/methods.R"))
+
+# plots reqs
+reqs <- theme(axis.text=element_text(size=9), axis.title=element_text(size=10), legend.text = element_text(size=12))
 ```
 
 Want to compare trajectory of EpiEstim estimates WITH and WITHOUT adjustment.
 Let s use a sliding windows of 7 days?
 
 ```{r}
-sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
+sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR.rds"))
 names <- names(sims_SEIR)
 
 # generation interval parameters
@@ -162,12 +164,13 @@ gg2 <- ggplot(incidence, aes(x= day, y = logcases, color = before_first )) +
               alpha=0.5,
               inherit.aes = FALSE) + 
   theme_classic2() +theme(legend.position = 'bottom') +
-  labs(y = "log(cases)", color = '' ) 
+  labs(y = "logged cases", color = '' ) 
 
 gg <- ggarrange(gg2, gg,
                  labels="AUTO")
-ggsave(file.path(plots_path, 'effects_adjustment.png'), w=10, h=5)
-ggsave(file.path(plots_path, 'effects_adjustment.pdf'), w=10, h=5)
+#ggsave(gg, file.path(plots_path, 'effects_adjustment.png'), w=10, h=5)
+#ggsave(gg, file.path(plots_path, 'effects_adjustment.pdf'), w=10, h=5)
+ggsave(filename=file.path(plots_path, 'effects_adjustment.tiff'), gg + reqs, device = 'tiff', w=10, h=5, dpi=600)
 ```
 
 

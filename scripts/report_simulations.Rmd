@@ -30,20 +30,33 @@ g_legend<-function(a.gplot){
   leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
   legend <- tmp$grobs[[leg]]
   return(legend)}
+
+# figure requirements
+reqs <- theme(axis.text=element_text(size=9), axis.title=element_text(size=10), 
+              legend.text = element_text(size=12), strip.text = element_text(size=10))
 ```
 
 Under-reporting is modeled as: 
 $$
 y_t \sim \text{Binom}(I_t, \rho).
 $$
-
+We can run the analysis with either SEIR simulated data or Branching Process simulations. The type of data is determined by the first parameter below:
 ```{r}
-sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
-names <- names(sims_SEIR)[c(2,4,6,8)]
+sim_type <- 'SEIR' # sim_type <- 'BP' 
+
+if(sim_type == 'SEIR'){
+  sims <- readRDS(file.path(data_path, "sims_SEIR.rds"))
+  names <- names(sims)[c(2,4,6,8)]
+}
+if(sim_type == 'BP')
+{
+  sims <- readRDS(file.path(data_path, "sims_BP.rds"))
+  names <- names(sims)
+}
 
 # generation interval parameters
 mean_si <- 6.5
-sd_si <- sqrt(3^2 + 3.5^2)
+sd_si <- sqrt(3^2 + 3.5^2) # may need to adjust this for Branching Pr
 
 # dataframe for coverage and CI width:
 coverage_stats <- data.frame(method = as.character(),
@@ -55,8 +68,6 @@ coverage_stats <- data.frame(method = as.character(),
                              q_Rt50 = as.numeric(),
                              q_Rt95 = as.numeric()
                              )
-
-if.plots <- FALSE
 ```
 
 ## Results {.tabset}
@@ -86,7 +97,7 @@ estimated_starts <- data.frame(R0 = as.character(),
 for (name in names){
   
   # Transform the data
-  df <- as.data.frame(sims_SEIR[[name]])
+  df <- as.data.frame(sims[[name]])
   df$day <- 1:(dim(df)[1])
   
   # Now cut off 2 weeks of data
@@ -158,7 +169,8 @@ for (name in names){
   
   
   # show results:
-  trueR0 <- as.numeric(stringr::str_match(name, "R0=\\s*(.*?)\\s*pop")[2])
+  trueR0 <- gsub('pop=(.*?)$','',name)
+  trueR0 <- as.numeric(gsub('R0=','',trueR0))
   
   results$method <- as.factor(plyr::revalue(results$method, 
                                             c("EgLin"="EG", "EpiEstim_adjusted"="EpEsAdj", "simpleEpiEstim"="EpEs")))
@@ -210,9 +222,9 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
-
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.tiff')),figure+reqs, device='tiff', w=10, h=6.5, dpi=600)
 ```
 
 ### rho = 0.5
@@ -236,7 +248,7 @@ estimated_starts <- data.frame(R0 = as.character(),
 for (name in names){
   
   # Transform the data
-  df <- as.data.frame(sims_SEIR[[name]])
+  df <- as.data.frame(sims[[name]])
   df$day <- 1:(dim(df)[1])
   
   # Now cut off 2 weeks of data
@@ -309,16 +321,17 @@ for (name in names){
   
   
   # show results:
-  trueR0 <- as.numeric(stringr::str_match(name, "R0=\\s*(.*?)\\s*pop")[2])
+  trueR0 <- gsub('pop=(.*?)$','',name)
+  trueR0 <- as.numeric(gsub('R0=','',trueR0))
   
   results$method <- as.factor(plyr::revalue(results$method, 
                                             c("EgLin"="EG", "EpiEstim_adjusted"="EpEsAdj", "simpleEpiEstim"="EpEs")))
   results <- results %>% group_by(method)
   
   
-  
-  
   # This is stupid but otherwise I can t get it to work:
+  # Could maybe use lapply?
+  
   if(trueR0 == 1.5){
     gg <- ggplot(data = results, aes(y = R0, x = method, fill = method)) + geom_violin() +
       geom_hline(aes(yintercept = 1.5),col = "red", linetype = "dashed")
@@ -366,8 +379,10 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
-ggsave(file.path(plots_path,'figure2.png'),figure, w = 10, h = 6.5)
-ggsave(file.path(plots_path,'figure2.pdf'),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.tiff')),figure+reqs, device='tiff', w=10, h=6.5)
+
 ```
 
 ### rho = 0.3
@@ -391,7 +406,7 @@ estimated_starts <- data.frame(R0 = as.character(),
 for (name in names){
   
   # Transform the data
-  df <- as.data.frame(sims_SEIR[[name]])
+  df <- as.data.frame(sims[[name]])
   df$day <- 1:(dim(df)[1])
   
   # Now cut off 2 weeks of data
@@ -464,7 +479,8 @@ for (name in names){
   
   
   # show results:
-  trueR0 <- as.numeric(stringr::str_match(name, "R0=\\s*(.*?)\\s*pop")[2])
+  trueR0 <- gsub('pop=(.*?)$','',name)
+  trueR0 <- as.numeric(gsub('R0=','',trueR0))
   
   results$method <- as.factor(plyr::revalue(results$method, 
                                             c("EgLin"="EG", "EpiEstim_adjusted"="EpEsAdj", "simpleEpiEstim"="EpEs")))
@@ -515,8 +531,9 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.tiff')),figure+reqs, device='tiff', w=10, h=6.5, dpi=600)
 ```
 
 ### rho = 0.15
@@ -540,7 +557,7 @@ estimated_starts <- data.frame(R0 = as.character(),
 for (name in names){
   
   # Transform the data
-  df <- as.data.frame(sims_SEIR[[name]])
+  df <- as.data.frame(sims[[name]])
   df$day <- 1:(dim(df)[1])
   
   # Now cut off 2 weeks of data
@@ -613,8 +630,9 @@ for (name in names){
   
   
   # show results:
-  trueR0 <- as.numeric(stringr::str_match(name, "R0=\\s*(.*?)\\s*pop")[2])
-  
+  trueR0 <- gsub('pop=(.*?)$','',name)
+  trueR0 <- as.numeric(gsub('R0=','',trueR0))
+    
   results$method <- as.factor(plyr::revalue(results$method, 
                                             c("EgLin"="EG", "EpiEstim_adjusted"="EpEsAdj", "simpleEpiEstim"="EpEs")))
   results <- results %>% group_by(method)
@@ -670,14 +688,16 @@ figure <- ggarrange(list_plots[[names[1]]], list_plots[[names[2]]], list_plots[[
                     labels = c("R0 = 1.5", "R0 = 2", "R0 = 2.5", "R0 = 3"),
                     ncol = 2, nrow = 2)
 figure
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.png')),figure, w = 10, h = 6.5)
-ggsave(file.path(plots_path,paste0('figure2_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.png')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.pdf')),figure, w = 10, h = 6.5)
+ggsave(file.path(plots_path,paste0('figure2_',sim_type,'_sens',rho,'.tiff')),figure+reqs, device='tiff', w=10, h=6.5, dpi=600)
 ```
 
 ### Coverage and CI width plot
 
 
 ```{r}
+# coverage_stats$method <- as.factor(plyr::revalue(coverage_stats$method, c("EG"="EgLin", "EpEsAdj"="EpiEstim_adjusted", "EpEs"="simpleEpiEstim")))
 coverage_stats$method <- as.factor(plyr::revalue(coverage_stats$method, c("EgLin"="EG", "EpiEstim_adjusted"="EpEsAdj", "simpleEpiEstim"="EpEs")))
 coverage_stats$R0 <- as.factor(coverage_stats$R0)
 coverage_stats$R0 <- as.factor(plyr::revalue(coverage_stats$R0, c("1.5"="R0 = 1.5", "2"="R0 = 2", "2.5"="R0 = 2.5", "3"="R0 = 3")))
@@ -690,7 +710,7 @@ oo <- ggplot(coverage_stats, aes(x = method, col = rho, fill = rho)) +
   geom_errorbar(aes(ymin = q_Rt05, ymax = q_Rt95), position = position_dodge(.6), width = .5, alpha=.5) +
   geom_point(aes(y = q_Rt50), position = position_dodge(.6)) + 
   geom_hline(aes(yintercept = as.numeric(gsub("R = ", "", R0))), linetype = 'dashed')+
-  facet_grid(cols = vars(R0)) + ylab('median')
+  facet_grid(cols = vars(R0)) + ylab('median') + 
   labs(fill = "Reporting \nrate", col = 'Reporting \nrate') 
 
 pp <- ggplot(coverage_stats, aes(x = method, y = coverage, col = rho, fill = rho)) +
@@ -711,9 +731,9 @@ tmp <- ggarrange(oo + rm, pp + rm, qq + rm,
 gg <- ggarrange(tmp, mylegend,
           widths = c(10,1),
           ncol = 2) 
-
-ggsave(file.path(plots_path,'figure3.png'), gg, w = 10, h = 7)
-ggsave(file.path(plots_path,'figure3.pdf'), gg, w = 10, h = 7)
-
+gg
+ggsave(file.path(plots_path, paste0('figure3_',sim_type,'.png')), gg, w = 10, h = 7)
+ggsave(file.path(plots_path, paste0('figure3_',sim_type,'.pdf')), gg, w = 10, h = 7)
+ggsave(file.path(plots_path, paste0('figure3_',sim_type,'.tiff')),gg+reqs, device='tiff', w=10, h=7, dpi=600)
 ```
 

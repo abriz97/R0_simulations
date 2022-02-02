@@ -17,12 +17,11 @@ require(ggpubr)
 
 # set up directories' paths
 repo_path <- '~/Documents/mini_project_2/R0_simulations'
-setwd(repo_path)
 data_path <- '~/Documents/mini_project_2/R0_simulations/data/'
 plots_path <- '~/Documents/mini_project_2/plots'
 
 # sources 
-source("scripts/methods.R")
+source("/home/andrea/Documents/mini_project_2/R0_simulations/scripts/methods.R")
 
 # extracts legend
 g_legend<-function(a.gplot){
@@ -47,6 +46,9 @@ MGF_integral <- function(x, mean_GT, sd_GT){
   
   return(out)
 }
+
+reqs <- theme(axis.text=element_text(size=9), axis.title=element_text(size=10), 
+              legend.text = element_text(size=12), strip.text = element_text(size=10))
 ```
 
 
@@ -58,7 +60,7 @@ The aim is to 'value' the contribution of our adjustment as well as characterise
 We start by loading up the data as always.
 
 ```{r}
-sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR"))
+sims_SEIR <- readRDS(file.path(data_path, "sims_SEIR.rds"))
 names <- names(sims_SEIR)[c(2,4,6,8)]
 
 # generation interval parameters
@@ -211,7 +213,9 @@ gg <- ggplot(filter(analysis), aes(x = week_of_estimate, y = estR0, fill = metho
   theme_bw() + xlab('window used') + ylab(expression("R"[0])) + theme(legend.position = 'bottom') + 
   labs(fill = 'Method')
 gg
-ggsave(file.path(plots_path, 'figure4.png'), w = 10, h = 6.5)
+ggsave(file.path(plots_path, 'figure4.png'), gg, w = 10, h = 6.5)
+ggsave(file.path(plots_path, 'figure4.tiff'),gg+reqs, device='tiff', w=10, h=6.5, dpi=600)
+
 a <- analysis %>%  summarise( bias = mean(estR0) - trueR0,
                               CIwidth = mean(upCI - lowCI),
                               coverage = mean(trueR0 <= upCI & trueR0 >= lowCI))
