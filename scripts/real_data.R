@@ -2,7 +2,6 @@ require(data.table)
 require(EpiEstim)
 require(lubridate)
 require(ggplot2)
-# == extracts legend
 require(ggpubr)
 library(cowplot)
 
@@ -10,6 +9,7 @@ library(cowplot)
 args_line <-  as.list(commandArgs(trailingOnly=TRUE))
 if(length(args_line) > 0) 
 {
+  # Rscript real_data.R -M 4 -SD 2
   args <- list()
   stopifnot(args_line[[1]]=='-M')	
   stopifnot(args_line[[3]]=='-SD')
@@ -17,7 +17,9 @@ if(length(args_line) > 0)
   args$SD <- args_line[[4]]
 } 
 
-
+# figure requirements
+reqs <- theme(axis.text=element_text(size=9), axis.title=element_text(size=10), 
+              legend.text = element_text(size=12), strip.text = element_text(size=10))
 
 # set up directories' paths
 repo_path <- '~/Documents/mini_project_2/R0_simulations'
@@ -175,13 +177,18 @@ SOURCE = 'Ganyani et al';MEAN = 5.70; SD = 1.72 # (5.7, 1.72)
 
 # SOURCE = 'CV0';MEAN = 4; SD = 2
 # SOURCE = 'CV1';MEAN = 6; SD = 3
-SOURCE = 'CV2';MEAN = 8; SD = 4
+# SOURCE = 'CV2';MEAN = 8; SD = 4
 
 if(is.list(args) & length(args) == 2)
 {
   MEAN = as.numeric(args$M)
   SD = as.numeric(args$SD)
   SOURCE = ''
+  if(MEAN/SD == 2)
+  {
+          tmp <- SD-2
+          SOURCE=paste0('CV', tmp)
+  }
 }
 
 title <- paste0(SOURCE, ', mean = ', MEAN, ', sd = ', SD)
@@ -196,7 +203,8 @@ data <- extract_by_country('Italy')
 data <- data[31:50,]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('') + ylab('logged cases')
 
 italy_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 italy_res$adjustment2 <- factor(italy_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -204,9 +212,10 @@ italy_res$adjustment2 <- factor(italy_res$adjustment, labels = c('EpEs', 'EpEsAd
 
 gg <- ggplot(italy_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
-  ylab('Rt') + xlab('') +
+  ylab(expression('R'['t'])) + xlab('') +
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_x_date(date_labels = "%d-%m-%y")+
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + theme(legend.position = "bottom") + 
   labs(fill = 'Method', color='Method')
 
@@ -231,16 +240,18 @@ data <- extract_by_country('United Kingdom')[33:60]
 
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() + 
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 UK_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 UK_res$adjustment2 <- factor(UK_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
 
 gg <- ggplot(UK_res, aes(x = date, y = M, color = adjustment2, fill = adjustment2)) +
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
-  ylab('Rt') + xlab('') +
+  ylab(expression('R'['t'])) + xlab('') +
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
+  scale_x_date(date_labels = "%d-%m-%y")+
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") + 
   labs(fill = 'Method', color='Method')
 
@@ -261,7 +272,8 @@ data <- extract_by_country('France')
 data <- data[35:60]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 france_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 france_res$adjustment2 <- factor(france_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -271,7 +283,8 @@ gg <- ggplot(france_res, aes(x = date, y = M, color = adjustment2, fill = adjust
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') + xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) + xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") 
 
 France <- ggarrange(pp, gg,
@@ -290,7 +303,8 @@ data <- extract_by_country('US')
 data <- data[39:69]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 
 US_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
@@ -301,7 +315,8 @@ gg <- ggplot(US_res, aes(x = date, y = M, color = adjustment2, fill = adjustment
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
 US <- ggarrange(pp, gg,
@@ -321,7 +336,8 @@ data <- extract_by_country('Germany')
 data <- data[35:70]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 Ger_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 Ger_res$adjustment2 <- factor(Ger_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -331,7 +347,8 @@ gg <- ggplot(Ger_res, aes(x = date, y = M, color = adjustment2, fill = adjustmen
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
 Germany <- ggarrange(pp, gg,
@@ -350,7 +367,8 @@ data <- extract_by_country('Sweden')
 data <- data[42:80]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 Swe_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 Swe_res$adjustment2 <- factor(Swe_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -359,7 +377,8 @@ gg <- ggplot(Swe_res, aes(x = date, y = M, color = adjustment2, fill = adjustmen
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none") 
 
 Sweden <- ggarrange(pp, gg,
@@ -378,7 +397,8 @@ data <- extract_by_country('Spain')
 data <- data[35:65]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 Spain_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 Spain_res$adjustment2 <- factor(Spain_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -387,7 +407,8 @@ gg <- ggplot(Spain_res, aes(x = date, y = M, color = adjustment2, fill = adjustm
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
 Spain <- ggarrange(pp, gg,
@@ -406,7 +427,8 @@ data <- extract_by_country('Netherlands')
 data <- data[39:69]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 Neth_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 Neth_res$adjustment2 <- factor(Neth_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -416,7 +438,8 @@ gg <- ggplot(Neth_res, aes(x = date, y = M, color = adjustment2, fill = adjustme
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
 Netherlands <- ggarrange(pp, gg,
@@ -434,7 +457,8 @@ data <- extract_by_country('Denmark')
 data <- data[47:77]
 pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  scale_x_date(date_labels = "%d-%m-%y")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 Denmark_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 Denmark_res$adjustment2 <- factor(Denmark_res$adjustment, labels = c('EpEs', 'EpEsAd'),levels=c('FALSE', 'TRUE'))
@@ -443,7 +467,8 @@ gg <- ggplot(Denmark_res, aes(x = date, y = M, color = adjustment2, fill = adjus
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
   scale_fill_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
   scale_color_manual(breaks = c("EpEs", "EpEsAd"), values=c(5,2)) + 
-  ylab('Rt') +  xlab('') +
+  scale_x_date(date_labels = "%d-%m-%y")+
+  ylab(expression('R'['t'])) +  xlab('') +
   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))  + theme(legend.position = "none")
 
 Denmark <- ggarrange(pp, gg,
@@ -466,8 +491,9 @@ final <- ggarrange(italy, UK, Sweden, US, common.legend = T)
 final <- ggarrange(final, as_ggplot(my_legend), heights = c(95,5), nrow = 2)
 
 cat('plot image')
-ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.png')), final, w=10,h=5)
-ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.pdf')), final, w=10,h=5)
+ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.png')), final, w=10,h=6)
+ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.pdf')), final, w=10,h=6)
+ggsave(file.path(plots_path, paste0('realdata_M', MEAN,'_SD', SD, '.tiff')), final+reqs, device='tiff', w=10,h=6)
 cat('Saved image\n')
 
 if(is.list(args) & length(args) == 2)
@@ -485,13 +511,13 @@ R0_final
 # pp <- ggplot(data, aes(x = mdy(date), y = log(cases))) + geom_point() +
 #   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) +
 #   geom_vline(mapping = aes(xintercept = mdy('2/21/20')), color= 'green') + 
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 # 
 # italy_res <- EpEstimComparison(data, eg_window = 7, WINDOW = 7)
 # 
 # gg <- ggplot(dplyr::filter(italy_res, adjustment == FALSE), aes(x = date, y = M)) +
 #   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
-#   ylab('Rt') + xlab('') +
+#   ylab(expression('R'['t'])) + xlab('') +
 #   theme_bw() +   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + theme(legend.position = 'none')
 # 
 # my_legend <- get_legend(gg)
@@ -530,7 +556,7 @@ res$date[1:(L-7)] <- L + 1 - rev(seq_along(res$date[1:(L-7)]))
 
 pp <-  ggplot(data, aes(x = date, y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 gg <- ggplot(dplyr::filter(res, !is.na(M)), aes(x = date, y = M, color = adjustment, fill = adjustment)) + 
   geom_line() + geom_ribbon(aes(ymin = l, ymax = u), alpha = .3) + 
@@ -563,7 +589,7 @@ res$date[1:(L-7)] <- L + 1 - rev(seq_along(res$date[1:(L-7)]))
 
 pp <- ggplot(data, aes(x = date, y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 
 gg <- ggplot(dplyr::filter(res, !is.na(M)), aes(x = date, y = M, color = adjustment, fill = adjustment)) + 
@@ -599,7 +625,7 @@ res$date[1:(L-7)] <- L + 1 - rev(seq_along(res$date[1:(L-7)]))
 
 pp <- ggplot(data, aes(x = date, y = log(cases))) + geom_point() +
   geom_smooth(method='lm', formula= y~x, data = data[1:7,], se=F) + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + xlab('')+ ylab('logged cases')
 
 
 gg <- ggplot(dplyr::filter(res, !is.na(M)), aes(x = date, y = M, color = adjustment, fill = adjustment)) + 
