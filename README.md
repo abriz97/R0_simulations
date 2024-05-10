@@ -1,6 +1,7 @@
 ## R0-methods-comparison
+[![DOI:10.1093/cid/ciac138](http://img.shields.io/badge/DOI-10.1093/cid/ciac138-B31B1B.svg)](https://doi.org/10.1093/cid/ciac138)
 
-Code and data to reproduce the analysis in: [Refining reproduction number estimates to account for unobserved generations of infection in emerging epidemics] (https://www.medrxiv.org/content/10.1101/2021.11.08.21266033v1)
+Code and data to reproduce the analysis in: [Refining reproduction number estimates to account for unobserved generations of infection in emerging epidemics](https://doi.org/10.1093/cid/ciac138)
 
 ### Code
 
